@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cal · Registro de calorías</title>
+  <meta name="description" content="Registrá tus comidas, calculá tu déficit calórico y seguí tu progreso día a día.">
+  <meta name="theme-color" content="#f6f3ee">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><circle cx='32' cy='32' r='30' fill='%231f7a5a'/><path d='M43 23a14 14 0 1 0 0 18' fill='none' stroke='white' stroke-width='6' stroke-linecap='round'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..600&family=Manrope:wght@400..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('calapp.theme');
+        if (t) document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#" aria-label="Cal, inicio"><span class="brand-mark">C</span>Cal</a>
+    <div class="top-actions">
+      <button id="btnProfile" class="icon-btn" type="button" aria-label="Editar mis datos" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
+      </button>
+      <button id="btnTheme" class="icon-btn" type="button" aria-label="Cambiar entre tema claro y oscuro">
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.500 10.500z"/></svg>
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.900 4.900l1.400 1.400M17.700 17.700l1.400 1.400M4.900 19.100l1.400-1.400M17.700 6.300l1.400-1.400"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Datos iniciales -->
+  <main id="viewSetup" class="wrap narrow" hidden>
+    <p class="eyebrow">Primer paso</p>
+    <h1 id="setupTitle">Contanos sobre vos</h1>
+    <p class="lead">Con estos datos calculamos tu IMC, tus calorías de mantenimiento y tu objetivo diario.</p>
+
+    <form id="formSetup" class="card form" novalidate>
+      <fieldset>
+        <legend>Sexo</legend>
+        <div class="seg">
+          <label><input type="radio" name="sexo" value="f" required><span>Mujer</span></label>
+          <label><input type="radio" name="sexo" value="m"><span>Hombre</span></label>
+        </div>
+      </fieldset>
+
+      <div class="grid3">
+        <label class="field"><span>Edad</span>
+          <div class="input-unit"><input name="edad" type="number" inputmode="numeric" min="14" max="100" required><em>años</em></div></label>
+        <label class="field"><span>Peso</span>
+          <div class="input-unit"><input name="peso" type="number" inputmode="decimal" min="30" max="300" step="0.1" required><em>kg</em></div></label>
+        <label class="field"><span>Altura</span>
+          <div class="input-unit"><input name="altura" type="number" inputmode="numeric" min="120" max="230" required><em>cm</em></div></label>
+      </div>
+
+      <fieldset>
+        <legend>Nivel de actividad física</legend>
+        <div class="options" id="optActividad"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Déficit calórico</legend>
+        <div class="options three" id="optDeficit"></div>
+      </fieldset>
+
+      <div id="setupPreview" class="preview" aria-live="polite"></div>
+      <p id="setupError" class="error" role="alert" hidden></p>
+
+      <div class="form-actions">
+        <button type="button" id="btnCancelSetup" class="btn ghost" hidden>Cancelar</button>
+        <button type="submit" class="btn primary">Guardar y continuar</button>
+      </div>
+    </form>
+    <p class="fine">El cálculo usa la fórmula de Mifflin-St Jeor, que necesita sexo y edad además de peso y altura. Es una estimación y no reemplaza la consulta con un profesional de la salud.</p>
+  </main>
+
+  <!-- Panel diario -->
+  <main id="viewDay" class="wrap" hidden>
+    <nav class="daynav" aria-label="Día">
+      <button id="btnPrev" class="icon-btn" type="button" aria-label="Día anterior"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <div class="daynav-title">
+        <h1 id="dayTitle">Hoy</h1>
+        <p id="daySub"></p>
+      </div>
+      <button id="btnNext" class="icon-btn" type="button" aria-label="Día siguiente"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+    </nav>
+
+    <section class="card summary" aria-label="Resumen del día">
+      <div class="ring-box">
+        <svg class="ring" viewBox="0 0 200 200" role="img" aria-labelledby="ringLabel">
+          <title id="ringLabel"></title>
+          <circle class="ring-track" cx="100" cy="100" r="84"/>
+          <circle id="ringArc" class="ring-arc" cx="100" cy="100" r="84" transform="rotate(-90 100 100)"/>
+        </svg>
+        <div class="ring-center">
+          <strong id="kcalNow">0</strong>
+          <span id="kcalOf">de 0 kcal</span>
+        </div>
+      </div>
+      <div class="summary-side">
+        <p id="statusLine" class="status-line"></p>
+        <dl class="stats">
+          <div><dt>Mantenimiento</dt><dd id="stMaint">–</dd></div>
+          <div><dt>Déficit</dt><dd id="stDef">–</dd></div>
+          <div><dt>IMC</dt><dd id="stImc">–</dd></div>
+        </dl>
+        <div class="macros" id="macros"></div>
+      </div>
+    </section>
+    <p id="lowWarn" class="notice" hidden></p>
+
+    <section class="card" aria-labelledby="addTitle">
+      <h2 id="addTitle">Registrar comida</h2>
+      <form id="formSearch" class="search">
+        <input id="q" type="text" autocomplete="off" enterkeyhint="search" placeholder="Ej.: 3 huevos revueltos, 200 g de arroz, 1 taza de leche" aria-label="Qué comiste">
+        <button class="btn primary" type="submit">Buscar</button>
+      </form>
+      <div id="results" class="results" aria-live="polite"></div>
+      <div id="editor" class="editor" hidden></div>
+      <button id="btnManual" class="link" type="button">Cargar calorías a mano</button>
+      <form id="formManual" class="manual" hidden>
+        <label class="field wide"><span>Nombre</span><input name="name" type="text" required></label>
+        <label class="field"><span>Calorías</span><div class="input-unit"><input name="k" type="number" min="0" step="1" required><em>kcal</em></div></label>
+        <label class="field"><span>Proteína</span><div class="input-unit"><input name="p" type="number" min="0" step="0.1"><em>g</em></div></label>
+        <label class="field"><span>Carbohidratos</span><div class="input-unit"><input name="c" type="number" min="0" step="0.1"><em>g</em></div></label>
+        <label class="field"><span>Grasas</span><div class="input-unit"><input name="f" type="number" min="0" step="0.1"><em>g</em></div></label>
+        <button class="btn primary" type="submit">Agregar</button>
+      </form>
+    </section>
+
+    <section class="card" aria-labelledby="logTitle">
+      <h2 id="logTitle">Comidas del día</h2>
+      <div id="log"></div>
+    </section>
+
+    <section class="card" aria-labelledby="histTitle">
+      <div class="card-head">
+        <h2 id="histTitle">Últimos 14 días</h2>
+        <p id="histAvg" class="muted"></p>
+      </div>
+      <div id="chart" class="chart"></div>
+      <details class="table-view">
+        <summary>Ver como tabla</summary>
+        <div id="histTable"></div>
+      </details>
+    </section>
+
+    <p class="fine">Los valores nutricionales son aproximados. Fuentes: tabla local de alimentos comunes y <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>. Tus datos se guardan solo en este dispositivo.</p>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="tip" class="tip" hidden></div>
+
+  <script src="foods.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

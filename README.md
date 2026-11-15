@@ -1,1 +1,34 @@
-# Cal-app
+# Cal app
+
+App web para registrar calorías y seguir un déficit calórico.
+
+## Qué hace
+
+- **Datos iniciales:** sexo, edad, peso, altura, nivel de actividad física y déficit (leve −200, moderado −600, alto −1000 kcal).
+- **Cálculos:** IMC, calorías de mantenimiento (fórmula de Mifflin-St Jeor × factor de actividad) y objetivo diario.
+- **Registro de comidas:** se escribe en lenguaje natural («3 huevos revueltos», «200 g de arroz», «1 taza de leche») y la app calcula calorías, proteína, carbohidratos y grasas. La cantidad se puede ajustar antes de agregar.
+- **Fuentes de datos:** tabla local de alimentos comunes (`foods.js`, valores aproximados por 100 g) y búsqueda en internet en [Open Food Facts](https://world.openfoodfacts.org).
+- **Progreso:** anillo con las calorías consumidas contra el objetivo y gráfico de los últimos 14 días.
+- **Historial:** cada día queda guardado y se puede volver a consultar o editar.
+- **Tema claro y oscuro.**
+
+Los datos se guardan en el navegador (`localStorage`); no hay servidor ni cuentas.
+
+## Cómo usarla
+
+Es un sitio estático, sin dependencias ni compilación. Basta con abrir `index.html`, o servir la carpeta:
+
+```bash
+python3 -m http.server 8000
+```
+
+Para publicarla gratis: en GitHub, *Settings → Pages → Deploy from a branch* y elegir la rama que contiene estos archivos.
+
+## Archivos
+
+- `index.html` — estructura
+- `styles.css` — estilos y temas
+- `app.js` — cálculos, buscador, registro e historial
+- `foods.js` — tabla local de alimentos
+
+Los valores nutricionales son estimaciones y la app no reemplaza el consejo de un profesional de la salud.
