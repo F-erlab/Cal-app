@@ -10,6 +10,8 @@ App web para registrar calorías y seguir un déficit calórico.
 - **Fuentes de datos:** tabla local de alimentos comunes (`foods.js`, valores aproximados por 100 g) y búsqueda en internet en [Open Food Facts](https://world.openfoodfacts.org).
 - **Progreso:** anillo con las calorías consumidas contra el objetivo y gráfico de los últimos 14 días.
 - **Historial:** cada día queda guardado y se puede volver a consultar o editar.
+- **Favoritos y recientes:** las comidas ya registradas se vuelven a agregar con un toque; con la estrella se guardan como favoritas.
+- **Seguimiento de peso:** registro por día con gráfico de evolución; el objetivo de calorías se recalcula con el último peso.
 - **Tema claro y oscuro.**
 
 Los datos se guardan en el navegador (`localStorage`); no hay servidor ni cuentas.

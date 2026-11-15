@@ -213,6 +213,31 @@ input:focus-visible + span, input:focus-visible + .opt { outline: 2px solid var(
 .manual .wide { grid-column: 1 / -1; }
 .manual .btn { grid-column: 1 / -1; justify-self: end; }
 
+/* Favoritos y recientes */
+.quick:empty { display: none; }
+.quick h3 { margin: 18px 0 8px; font: 700 .74rem var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: stretch; max-width: 100%; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); overflow: hidden; }
+.chip button { border: 0; background: none; cursor: pointer; }
+.chip button:hover { background: var(--surface-2); }
+.chip-add { padding: 8px 6px 8px 14px; text-align: left; min-width: 0; font-weight: 600; font-size: .92rem; overflow-wrap: anywhere; }
+.chip-add small { display: block; font-weight: 400; color: var(--text-3); font-size: .78rem; font-variant-numeric: tabular-nums; }
+.star { width: 40px; flex: none; font-size: 1.1rem; line-height: 1; color: var(--text-3); }
+.star[aria-pressed="true"] { color: var(--accent); }
+.entry .star { height: 36px; width: 36px; border: 0; background: none; border-radius: 50%; cursor: pointer; }
+.entry .star:hover { background: var(--surface-2); }
+.entry { gap: 6px; }
+.entry-k { margin: 0 4px 0 6px; }
+
+/* Peso */
+.grow { flex: 1; min-width: 0; }
+.chart .wline { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .wdot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.chart .wpt { cursor: default; outline: none; }
+.chart .wpt:hover .wdot, .chart .wpt:focus-visible .wdot { fill: var(--text); }
+.chart .wlabel { fill: var(--text); font-weight: 700; font-size: 12px; paint-order: stroke; stroke: var(--surface); stroke-width: 5px; stroke-linejoin: round; }
+.table-view .del { width: 30px; height: 30px; font-size: 1.1rem; }
+
 /* Registro */
 .meal + .meal { margin-top: 18px; }
 .meal-head { display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 6px; border-bottom: 1px solid var(--line); }

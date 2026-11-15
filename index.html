@@ -131,11 +131,29 @@
         <label class="field"><span>Grasas</span><div class="input-unit"><input name="f" type="number" min="0" step="0.1"><em>g</em></div></label>
         <button class="btn primary" type="submit">Agregar</button>
       </form>
+      <div id="quick" class="quick"></div>
     </section>
 
     <section class="card" aria-labelledby="logTitle">
       <h2 id="logTitle">Comidas del día</h2>
       <div id="log"></div>
+    </section>
+
+    <section class="card" aria-labelledby="wTitle">
+      <div class="card-head">
+        <h2 id="wTitle">Peso</h2>
+        <p id="wDelta" class="muted"></p>
+      </div>
+      <form id="formWeight" class="search">
+        <div class="input-unit grow"><input id="wInput" type="number" inputmode="decimal" min="30" max="300" step="0.1" aria-label="Peso en kilogramos"><em>kg</em></div>
+        <button class="btn primary" type="submit">Guardar peso</button>
+      </form>
+      <p id="wHint" class="hint"></p>
+      <div id="wChart" class="chart"></div>
+      <details id="wDetails" class="table-view">
+        <summary>Ver como tabla</summary>
+        <div id="wTable"></div>
+      </details>
     </section>
 
     <section class="card" aria-labelledby="histTitle">

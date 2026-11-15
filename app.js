@@ -186,6 +186,8 @@
   /* ---------- Estado ---------- */
   var profile = load('profile', null);
   var log = load('log', {});
+  var weights = load('weights', {});
+  var favs = load('favs', []);
   var day = today();
   var results = { local: [], online: [], state: 'idle', parsed: null };
   var sel = null; // { food, grams }
@@ -271,6 +273,7 @@
     var p = readForm(), err = validate(p);
     if (err) { $('setupError').textContent = err; $('setupError').hidden = false; return; }
     profile = p; save('profile', p);
+    weights[today()] = p.peso; save('weights', weights);
     showDay();
   });
   $('btnCancelSetup').addEventListener('click', showDay);
@@ -340,6 +343,8 @@
         ' kcal diarias que suelen recomendarse como mínimo. Considerá un déficit menor o consultá con un profesional.';
     }
     renderLog();
+    renderQuick();
+    renderWeight();
     renderChart(c);
   }
 
@@ -358,11 +363,18 @@
           return '<div class="entry"><div class="entry-main"><b>' + esc(e.name) + '</b><small>' +
             (e.g ? fmt(e.g) + ' g · ' : '') + 'P ' + fmt1(e.p) + ' · C ' + fmt1(e.c) + ' · G ' + fmt1(e.f) + '</small></div>' +
             '<span class="entry-k">' + fmt(e.k) + ' <small>kcal</small></span>' +
+            starBtn(e) +
             '<button class="del" type="button" data-del="' + e.id + '" aria-label="Quitar ' + esc(e.name) + '">×</button></div>';
         }).join('') + '</div>';
     }).join('');
   }
   $('log').addEventListener('click', function (ev) {
+    var s = ev.target.closest('[data-fav]');
+    if (s) {
+      var item = entries(day).filter(function (e) { return e.id === s.dataset.fav; })[0];
+      if (item) toggleFav(item);
+      return;
+    }
     var b = ev.target.closest('[data-del]');
     if (!b) return;
     log[day] = entries(day).filter(function (e) { return e.id !== b.dataset.del; });
@@ -480,6 +492,148 @@
     f.reset(); f.hidden = true;
   });
 
+  /* ---------- Favoritos y recientes ---------- */
+  function itemKey(e) { return norm(e.name) + '|' + (e.g || 0) + '|' + e.k; }
+  function isFav(e) { var k = itemKey(e); return favs.some(function (f) { return itemKey(f) === k; }); }
+  function toggleFav(e) {
+    var k = itemKey(e), was = isFav(e);
+    if (was) favs = favs.filter(function (f) { return itemKey(f) !== k; });
+    else favs.push({ name: e.name, g: e.g || 0, k: e.k, p: e.p, c: e.c, f: e.f });
+    save('favs', favs);
+    renderLog(); renderQuick();
+    toast(was ? 'Quitado de favoritos' : 'Guardado en favoritos');
+  }
+  function starBtn(e) {
+    var on = isFav(e);
+    return '<button class="star" type="button" data-fav="' + e.id + '" aria-pressed="' + on + '" aria-label="' +
+      (on ? 'Quitar de favoritos: ' : 'Guardar en favoritos: ') + esc(e.name) + '">' + (on ? '★' : '☆') + '</button>';
+  }
+  function recents() {
+    var seen = {}, out = [];
+    favs.forEach(function (f) { seen[itemKey(f)] = 1; });
+    Object.keys(log).sort().reverse().some(function (k) {
+      log[k].slice().reverse().forEach(function (e) {
+        var key = itemKey(e);
+        if (!seen[key] && out.length < 8) { seen[key] = 1; out.push(e); }
+      });
+      return out.length >= 8;
+    });
+    return out;
+  }
+  var quickItems = [];
+  function chip(e, on) {
+    var i = quickItems.push(e) - 1;
+    return '<span class="chip"><button type="button" class="chip-add" data-q="' + i + '" aria-label="Agregar ' + esc(e.name) + '">' + esc(e.name) +
+      '<small>' + (e.g ? fmt(e.g) + ' g · ' : '') + fmt(e.k) + ' kcal</small></button>' +
+      '<button type="button" class="star" data-qfav="' + i + '" aria-pressed="' + on + '" aria-label="' +
+      (on ? 'Quitar de favoritos: ' : 'Guardar en favoritos: ') + esc(e.name) + '">' + (on ? '★' : '☆') + '</button></span>';
+  }
+  function renderQuick() {
+    quickItems = [];
+    var rec = recents(), html = '';
+    if (favs.length) html += '<h3>Favoritos</h3><div class="chips">' + favs.map(function (f) { return chip(f, true); }).join('') + '</div>';
+    if (rec.length) html += '<h3>Recientes</h3><div class="chips">' + rec.map(function (e) { return chip(e, false); }).join('') + '</div>';
+    $('quick').innerHTML = html;
+  }
+  $('quick').addEventListener('click', function (ev) {
+    var s = ev.target.closest('[data-qfav]');
+    if (s) { toggleFav(quickItems[+s.dataset.qfav]); return; }
+    var b = ev.target.closest('[data-q]');
+    if (!b) return;
+    var e = quickItems[+b.dataset.q];
+    addEntry({ name: e.name, g: e.g || 0, meal: defaultMeal(), k: e.k, p: e.p, c: e.c, f: e.f, src: 'rapido' });
+  });
+
+  /* ---------- Peso ---------- */
+  function weightList() {
+    return Object.keys(weights).sort().map(function (k) { return { k: k, v: weights[k] }; });
+  }
+  function syncProfileWeight() {
+    var list = weightList();
+    if (!list.length) return false;
+    var last = list[list.length - 1].v;
+    if (last === profile.peso) return false;
+    profile.peso = last; save('profile', profile);
+    return true;
+  }
+  $('formWeight').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var v = parseFloat($('wInput').value);
+    if (!(v >= 30 && v <= 300)) { toast('Ingresá un peso entre 30 y 300 kg'); return; }
+    weights[day] = Math.round(v * 10) / 10; save('weights', weights);
+    var changed = syncProfileWeight();
+    renderDay();
+    toast(changed ? 'Peso guardado. Nuevo objetivo: ' + fmt(calc(profile).target) + ' kcal' : 'Peso guardado');
+  });
+  $('wTable').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-wdel]');
+    if (!b) return;
+    delete weights[b.dataset.wdel]; save('weights', weights);
+    syncProfileWeight();
+    renderDay();
+  });
+  function shortDate(k) { return fromKey(k).toLocaleDateString('es-PY', { day: 'numeric', month: 'short' }); }
+  function renderWeight() {
+    var list = weightList().slice(-60), n = list.length;
+    var isToday = day === today();
+    $('wInput').value = weights[day] != null ? weights[day] : '';
+    $('wInput').placeholder = isToday ? 'Tu peso de hoy' : 'Tu peso del ' + shortDate(day);
+    $('wDetails').hidden = !n;
+    if (!n) {
+      $('wDelta').textContent = ''; $('wChart').innerHTML = ''; $('wTable').innerHTML = '';
+      $('wHint').textContent = 'Anotá tu peso cada tanto para ver tu evolución. El objetivo de calorías se recalcula con el último peso.';
+      return;
+    }
+    var first = list[0], last = list[n - 1], diff = last.v - first.v;
+    $('wHint').textContent = n === 1 ? 'Con el próximo registro vas a ver tu evolución. El objetivo de calorías se recalcula con el último peso.' : '';
+    $('wDelta').textContent = n === 1 ? '' :
+      (Math.abs(diff) < 0.05 ? 'Sin cambios' : (diff < 0 ? '−' : '+') + fmt1(Math.abs(diff)) + ' kg') + ' desde el ' + shortDate(first.k);
+
+    var W = Math.max(260, Math.min(840, $('wChart').clientWidth || 640)), H = 190, L = 34, R = 34, T = 26, B = 26;
+    var vals = list.map(function (d) { return d.v; });
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+    var pad = Math.max(0.5, (hi - lo) * 0.15); lo = Math.floor(lo - pad); hi = Math.ceil(hi + pad);
+    var t0 = fromKey(first.k).getTime(), t1 = fromKey(last.k).getTime(), span = t1 - t0;
+    var x = function (k) { return span ? L + (fromKey(k).getTime() - t0) / span * (W - L - R) : W / 2; };
+    var y = function (v) { return T + (hi - v) / (hi - lo) * (H - T - B); };
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Evolución del peso. Último registro: ' + fmt1(last.v) + ' kg.">';
+    [hi, (hi + lo) / 2, lo].forEach(function (v) {
+      svg += '<line class="grid" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(v) + '" y2="' + y(v) + '"/>' +
+        '<text x="' + (L - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + fmt1(v) + '</text>';
+    });
+    if (n > 1) svg += '<path class="wline" d="M' + list.map(function (d) { return x(d.k).toFixed(1) + ' ' + y(d.v).toFixed(1); }).join('L') + '"/>';
+    list.forEach(function (d) {
+      svg += '<g class="wpt" tabindex="0" data-k="' + d.k + '" data-v="' + d.v + '" aria-label="' + shortDate(d.k) + ': ' + fmt1(d.v) + ' kg">' +
+        '<circle class="hit" cx="' + x(d.k) + '" cy="' + y(d.v) + '" r="14"/>' +
+        '<circle class="wdot" cx="' + x(d.k) + '" cy="' + y(d.v) + '" r="5"/></g>';
+    });
+    svg += '<text class="wlabel" x="' + x(last.k) + '" y="' + (y(last.v) - 11) + '" text-anchor="' + (n > 1 ? 'end' : 'middle') + '">' + fmt1(last.v) + ' kg</text>';
+    svg += '<text x="' + (n > 1 ? L : W / 2) + '" y="' + (H - 6) + '" text-anchor="' + (n > 1 ? 'start' : 'middle') + '">' + shortDate(first.k) + '</text>';
+    if (n > 1) svg += '<text x="' + (W - R) + '" y="' + (H - 6) + '" text-anchor="end">' + shortDate(last.k) + '</text>';
+    $('wChart').innerHTML = svg + '</svg>';
+
+    $('wTable').innerHTML = '<table><thead><tr><th>Día</th><th>Cambio</th><th>Peso</th><th><span hidden>Quitar</span></th></tr></thead><tbody>' +
+      list.slice().reverse().map(function (d, i, arr) {
+        var prev = arr[i + 1], ch = prev ? d.v - prev.v : null;
+        return '<tr><td>' + fromKey(d.k).toLocaleDateString('es-PY', { day: 'numeric', month: 'short', year: 'numeric' }) + '</td><td>' +
+          (ch == null ? '–' : Math.abs(ch) < 0.05 ? '0' : (ch < 0 ? '−' : '+') + fmt1(Math.abs(ch)) + ' kg') + '</td><td>' + fmt1(d.v) + ' kg</td>' +
+          '<td><button class="del" type="button" data-wdel="' + d.k + '" aria-label="Quitar el peso del ' + shortDate(d.k) + '">×</button></td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+  var wChart = $('wChart');
+  function showWTip(g) {
+    var r = g.querySelector('.wdot').getBoundingClientRect();
+    $('tip').innerHTML = '<b>' + fmt1(+g.dataset.v) + ' kg</b>' + fromKey(g.dataset.k).toLocaleDateString('es-PY', { weekday: 'short', day: 'numeric', month: 'short' });
+    $('tip').hidden = false;
+    var half = $('tip').offsetWidth / 2;
+    $('tip').style.left = Math.min(window.innerWidth - half - 8, Math.max(half + 8, r.left + r.width / 2)) + 'px';
+    $('tip').style.top = (r.top - 8) + 'px';
+  }
+  wChart.addEventListener('pointermove', function (ev) { var g = ev.target.closest('.wpt'); if (g) showWTip(g); else $('tip').hidden = true; });
+  wChart.addEventListener('pointerleave', function () { $('tip').hidden = true; });
+  wChart.addEventListener('focusin', function (ev) { var g = ev.target.closest('.wpt'); if (g) showWTip(g); });
+  wChart.addEventListener('focusout', function () { $('tip').hidden = true; });
+
   /* ---------- Historial ---------- */
   function renderChart(c) {
     var N = 14, days = [], t0 = today();
@@ -545,7 +699,7 @@
   var resizeTimer;
   window.addEventListener('resize', function () {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(function () { if (profile && !$('viewDay').hidden) renderChart(calc(profile)); }, 150);
+    resizeTimer = setTimeout(function () { if (profile && !$('viewDay').hidden) { renderChart(calc(profile)); renderWeight(); } }, 150);
   });
 
   /* ---------- Inicio ---------- */
