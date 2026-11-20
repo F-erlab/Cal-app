@@ -132,7 +132,7 @@ window.FOODS = [
   { n: 'Aceitunas', a: ['aceituna'], k: 115, p: 0.8, c: 6, f: 10.7, u: 4, un: 'aceituna' },
 
   // Dulces
-  { n: 'Azúcar', a: ['azucar'], k: 387, p: 0, c: 100, f: 0, m: { cucharada: 12, cucharadita: 4 } },
+  { n: 'Azúcar', a: ['azucar'], k: 387, p: 0, c: 100, f: 0, u: 4, un: 'cucharadita', m: { cucharada: 12, cucharadita: 4 } },
   { n: 'Miel', a: ['miel de abeja'], k: 304, p: 0.3, c: 82, f: 0, m: { cucharada: 21, cucharadita: 7 } },
   { n: 'Mermelada', a: ['dulce', 'jalea'], k: 250, p: 0.4, c: 65, f: 0.1, m: { cucharada: 20, cucharadita: 7 } },
   { n: 'Chocolate con leche', a: ['chocolate'], k: 535, p: 7.6, c: 59, f: 30, u: 25, un: 'barrita' },

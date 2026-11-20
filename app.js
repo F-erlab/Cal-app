@@ -141,19 +141,49 @@
     return list.map(function (f) { return { f: f, phrases: [f.n].concat(f.a || []).map(tokens) }; });
   }
   var INDEX = indexOf(window.FOODS || []);
-  function rank(index, qt, limit) {
+  function rankScored(index, qt, limit, min) {
     return index.map(function (it) {
       var best = 0;
       it.phrases.forEach(function (p) { best = Math.max(best, phraseScore(qt, p)); });
       return { f: it.f, s: best };
-    }).filter(function (r) { return r.s >= 0.5; })
+    }).filter(function (r) { return r.s >= min; })
       .sort(function (a, b) { return b.s - a.s; })
-      .slice(0, limit)
-      .map(function (r) { return r.f; });
+      .slice(0, limit);
   }
+  function foodsOf(list) { return list.map(function (r) { return r.f; }); }
   function searchLocal(name) {
     var qt = tokens(name);
-    return rank(indexOf(myFoods), qt, 4).concat(rank(INDEX, qt, 6));
+    return foodsOf(rankScored(indexOf(myFoods), qt, 4, 0.5)).concat(foodsOf(rankScored(INDEX, qt, 6, 0.5)));
+  }
+  function bestScore(name) {
+    var qt = tokens(name);
+    var r = rankScored(indexOf(myFoods), qt, 1, 0).concat(rankScored(INDEX, qt, 1, 0));
+    return r.reduce(function (m, x) { return Math.max(m, x.s); }, 0);
+  }
+
+  /* Combinaciones: "pan con queso", "arroz, pollo y ensalada" */
+  var SPLIT_RE = /\s*(?:,|\bcon\b|\bmas\b|\by\b(?!\s+medi[oa]\b))\s*/;
+  function buildCombo(text) {
+    var pieces = norm(String(text).replace(/\+/g, ',')).split(SPLIT_RE).map(function (s) { return s.trim(); }).filter(Boolean);
+    if (pieces.length < 2) return null;
+    var parts = [], missing = [], myIndex = indexOf(myFoods);
+    pieces.forEach(function (piece) {
+      var pq = parseQuery(piece);
+      if (!pq.name) pq = { qty: null, unit: null, name: piece };
+      var qt = tokens(pq.name);
+      var cands = foodsOf(rankScored(myIndex, qt, 2, 0.6).concat(rankScored(INDEX, qt, 4, 0.6)));
+      if (!cands.length) { missing.push(pq.name); return; }
+      parts.push({ cands: cands, i: 0, qty: pq.qty, unit: pq.unit, grams: Math.max(1, Math.round(gramsFor(cands[0], pq.qty, pq.unit))) });
+    });
+    if (!parts.length) return null;
+    var title = String(text).trim();
+    return { combo: 1, n: title.charAt(0).toUpperCase() + title.slice(1), parts: parts, missing: missing };
+  }
+  function comboTotals(cb) {
+    return cb.parts.reduce(function (t, pt) {
+      var m = macrosFor(pt.cands[pt.i], pt.grams || 0);
+      t.k += m.k; t.p += m.p; t.c += m.c; t.f += m.f; return t;
+    }, { k: 0, p: 0, c: 0, f: 0 });
   }
 
   // Convierte cantidad + unidad en gramos para un alimento dado.
@@ -172,6 +202,8 @@
       case 'u': return q * (food.u || 100);
       default:
         if (food.u) return q * food.u;
+        // Untables y condimentos densos: por defecto, una cucharada
+        if (m.cucharada && !m.taza && food.k >= 250 && (qty == null || qty < 15)) return q * m.cucharada;
         if (qty == null) return food.liq ? 200 : 100;
         return qty >= 15 ? qty : qty * 100; // "150 arroz" se toma como gramos
     }
@@ -388,7 +420,7 @@
       var sum = items.reduce(function (s, e) { return s + e.k; }, 0);
       return '<div class="meal"><div class="meal-head"><h3>' + m[1] + '</h3><span>' + fmt(sum) + ' kcal</span></div>' +
         items.map(function (e) {
-          return '<div class="entry"><div class="entry-main"><b>' + esc(e.name) + '</b><small>' +
+          return '<div class="entry"><div class="entry-main"><b>' + esc(e.name) + '</b>' + (e.det ? '<small class="det">' + esc(e.det) + '</small>' : '') + '<small>' +
             (e.g ? fmt(e.g) + ' g · ' : '') + 'P ' + fmt1(e.p) + ' · C ' + fmt1(e.c) + ' · G ' + fmt1(e.f) + '</small></div>' +
             '<span class="entry-k">' + fmt(e.k) + ' <small>kcal</small></span>' +
             starBtn(e) +
@@ -421,9 +453,11 @@
     var parsed = parseQuery(text);
     if (!parsed.name) { parsed = { qty: null, unit: null, name: norm(text) }; }
     var seq = ++searchSeq;
-    results = { parsed: parsed, local: searchLocal(parsed.name), online: [], state: 'loading' };
+    results = { parsed: parsed, local: searchLocal(parsed.name), online: [], state: 'loading', combo: null };
+    // Si no hay un alimento que coincida con todo el texto, se calcula sumando sus partes.
+    if (bestScore(parsed.name) < 0.9) results.combo = buildCombo(text);
     sel = null;
-    if (results.local.length) select(results.local[0]); else renderResults();
+    if (results.combo) selectCombo(); else if (results.local.length) select(results.local[0]); else renderResults();
     searchOnline(parsed.name).then(function (items) {
       if (seq !== searchSeq) return;
       results.online = items; results.state = 'done';
@@ -435,6 +469,11 @@
   });
 
   function all() { return results.local.concat(results.online); }
+  function selectCombo() {
+    sel = { combo: results.combo };
+    renderResults();
+    renderEditor();
+  }
   function select(food) {
     var pq = results.parsed;
     sel = { food: food, grams: Math.max(1, Math.round(gramsFor(food, pq.qty, pq.unit))) };
@@ -453,7 +492,12 @@
     return fmt(g) + (food.liq ? ' ml' : ' g');
   }
   function renderResults() {
-    var html = '', n = results.local.length, mine = '', common = '';
+    var html = '', n = results.local.length, mine = '', common = '', cb = results.combo;
+    if (cb) {
+      html += '<h3>Calculado sumando sus partes</h3><button type="button" class="res" data-combo aria-pressed="' + !!(sel && sel.combo) + '">' +
+        '<span class="res-name">' + esc(cb.n) + '<small>' + cb.parts.map(function (pt) { return esc(pt.cands[pt.i].n); }).join(' + ') + '</small></span>' +
+        '<span class="res-k">' + fmt(comboTotals(cb).k) + ' kcal</span></button>';
+    }
     results.local.forEach(function (f, i) { if (f.mine) mine += resRow(f, i); else common += resRow(f, i); });
     if (mine) html += '<h3>Mis alimentos</h3>' + mine;
     if (common) html += '<h3>Alimentos comunes</h3>' + common;
@@ -461,7 +505,7 @@
     else if (results.state === 'error') html += '<p class="hint">No se pudo consultar internet en este momento.' + (n ? '' : ' Podés cargar las calorías a mano.') + '</p>';
     else if (results.state === 'done') {
       if (results.online.length) html += '<h3>De internet · Open Food Facts</h3>' + results.online.map(function (f, i) { return resRow(f, n + i); }).join('');
-      else if (!n) html += '<p class="hint">No encontramos ese alimento. Probá con otro nombre o crealo vos con sus calorías.</p>';
+      else if (!n && !cb) html += '<p class="hint">No encontramos ese alimento. Probá con otro nombre o crealo vos con sus calorías.</p>';
     }
     if (results.state !== 'loading' && results.parsed) {
       html += '<button type="button" class="link" data-create>¿No está? Crear «' + esc(results.parsed.name) + '»</button>';
@@ -471,38 +515,105 @@
   }
   $('results').addEventListener('click', function (ev) {
     if (ev.target.closest('[data-create]')) { openManual(results.parsed.name); return; }
+    if (ev.target.closest('[data-combo]')) { selectCombo(); return; }
     var b = ev.target.closest('[data-i]');
     if (b) select(all()[+b.dataset.i]);
   });
 
+  function mealSelect(meal) {
+    return '<label class="field"><span>Comida</span><select id="edMeal">' + MEALS.map(function (m) {
+      return '<option value="' + m[0] + '"' + (m[0] === meal ? ' selected' : '') + '>' + m[1] + '</option>';
+    }).join('') + '</select></label>';
+  }
+  function renderComboEditor(meal) {
+    var cb = sel.combo;
+    $('editor').innerHTML = '<p class="editor-title">' + esc(cb.n) + '</p>' +
+      '<div class="combo">' + cb.parts.map(function (pt, i) {
+        var f = pt.cands[pt.i];
+        return '<div class="combo-row">' +
+          '<label class="field"><span>Ingrediente ' + (i + 1) + '</span><select data-part="' + i + '">' + pt.cands.map(function (c, k) {
+            return '<option value="' + k + '"' + (k === pt.i ? ' selected' : '') + '>' + esc(c.n) + (c.mine ? ' (mío)' : '') + '</option>';
+          }).join('') + '</select></label>' +
+          '<label class="field"><span>' + (f.po ? 'Porciones' : 'Cantidad') + '</span><div class="input-unit"><input data-pg="' + i + '" type="number" inputmode="decimal" min="0" step="' + (f.po ? '0.25' : '1') + '" value="' + (f.po ? pt.grams / 100 : pt.grams) + '"><em>' + (f.po ? '' : f.liq ? 'ml' : 'g') + '</em></div></label>' +
+          '<span class="combo-k" data-pk="' + i + '"></span></div>';
+      }).join('') + '</div>' +
+      (cb.missing.length ? '<p class="hint">No encontramos ' + cb.missing.map(function (m) { return '«' + esc(m) + '»'; }).join(', ') +
+        ', así que no está sumado. <button type="button" class="link inline" data-create-part="' + esc(cb.missing[0]) + '">Crear «' + esc(cb.missing[0]) + '»</button></p>' : '') +
+      '<div class="editor-row">' + mealSelect(meal) + '<button id="edAdd" class="btn primary" type="button">Agregar</button></div>' +
+      '<div class="editor-macros" id="edMacros"></div>';
+    updateEditorMacros();
+  }
   function renderEditor() {
     var ed = $('editor'), food = sel.food;
     ed.hidden = false;
-    var meal = ed.querySelector('select') ? ed.querySelector('select').value : defaultMeal();
+    var meal = ed.querySelector('#edMeal') ? ed.querySelector('#edMeal').value : defaultMeal();
+    if (sel.combo) { renderComboEditor(meal); return; }
     ed.innerHTML = '<p class="editor-title">' + esc(food.n) + '</p>' +
       '<div class="editor-row">' +
       (food.po
         ? '<label class="field"><span>Porciones</span><input id="edGrams" type="number" inputmode="decimal" min="0.25" step="0.25" value="' + sel.grams / 100 + '"></label>'
         : '<label class="field"><span>Cantidad</span><div class="input-unit"><input id="edGrams" type="number" inputmode="decimal" min="1" step="1" value="' + sel.grams + '"><em>' + (food.liq ? 'ml' : 'g') + '</em></div></label>') +
-      '<label class="field"><span>Comida</span><select id="edMeal">' + MEALS.map(function (m) {
-        return '<option value="' + m[0] + '"' + (m[0] === meal ? ' selected' : '') + '>' + m[1] + '</option>';
-      }).join('') + '</select></label>' +
+      mealSelect(meal) +
       '<button id="edAdd" class="btn primary" type="button">Agregar</button></div>' +
       '<div class="editor-macros" id="edMacros"></div>';
     updateEditorMacros();
   }
   function updateEditorMacros() {
+    if (sel.combo) {
+      sel.combo.parts.forEach(function (pt, i) {
+        var el = document.querySelector('[data-pk="' + i + '"]');
+        if (el) el.textContent = fmt(macrosFor(pt.cands[pt.i], pt.grams || 0).k) + ' kcal';
+      });
+      var t = comboTotals(sel.combo);
+      $('edMacros').innerHTML = '<span><strong>' + fmt(t.k) + '</strong> kcal en total</span>' +
+        '<span>Proteína ' + fmt1(t.p) + ' g</span><span>Carbohidratos ' + fmt1(t.c) + ' g</span><span>Grasas ' + fmt1(t.f) + ' g</span>';
+      var row = document.querySelector('.res[data-combo] .res-k');
+      if (row) row.textContent = fmt(t.k) + ' kcal';
+      return;
+    }
     var m = macrosFor(sel.food, sel.grams || 0), food = sel.food;
     var unit = food.u && !food.po ? '<span>1 ' + esc(food.un || 'porción') + ' ≈ ' + fmt(food.u) + ' g</span>' : '';
     $('edMacros').innerHTML = '<span><strong>' + fmt(m.k) + '</strong> kcal</span>' +
       '<span>Proteína ' + fmt1(m.p) + ' g</span><span>Carbohidratos ' + fmt1(m.c) + ' g</span><span>Grasas ' + fmt1(m.f) + ' g</span>' + unit;
   }
   $('editor').addEventListener('input', function (ev) {
+    var pg = ev.target.dataset && ev.target.dataset.pg;
+    if (pg != null && sel && sel.combo) {
+      var pt = sel.combo.parts[+pg];
+      pt.grams = (parseFloat(ev.target.value) || 0) * (pt.cands[pt.i].po ? 100 : 1);
+      updateEditorMacros();
+      return;
+    }
     if (ev.target.id !== 'edGrams') return;
     sel.grams = (parseFloat(ev.target.value) || 0) * (sel.food.po ? 100 : 1);
     updateEditorMacros();
   });
+  $('editor').addEventListener('change', function (ev) {
+    var pi = ev.target.dataset && ev.target.dataset.part;
+    if (pi == null || !sel || !sel.combo) return;
+    var pt = sel.combo.parts[+pi];
+    pt.i = +ev.target.value;
+    pt.grams = Math.max(1, Math.round(gramsFor(pt.cands[pt.i], pt.qty, pt.unit)));
+    renderEditor(); renderResults();
+  });
+  function resetSearch() {
+    searchSeq++; sel = null; results = { local: [], online: [], state: 'idle', parsed: null, combo: null };
+    $('q').value = ''; renderResults(); $('q').focus();
+  }
+  function commitCombo() {
+    var cb = sel.combo, t = comboTotals(cb);
+    var used = cb.parts.filter(function (pt) { return pt.grams > 0; });
+    if (!used.length) { toast('Ingresá una cantidad válida'); return; }
+    addEntry({
+      name: cb.n, meal: $('edMeal').value, src: 'combo',
+      g: used.reduce(function (s, pt) { return s + (pt.cands[pt.i].po ? 0 : pt.grams); }, 0),
+      det: used.map(function (pt) { var f = pt.cands[pt.i]; return f.n + ' ' + amountText(f, pt.grams); }).join(' + '),
+      k: Math.round(t.k), p: +t.p.toFixed(1), c: +t.c.toFixed(1), f: +t.f.toFixed(1)
+    });
+    resetSearch();
+  }
   function commitSelected() {
+    if (sel && sel.combo) { commitCombo(); return; }
     if (!sel || !(sel.grams > 0)) { toast('Ingresá una cantidad válida'); return; }
     var m = macrosFor(sel.food, sel.grams);
     var por = sel.grams / 100;
@@ -511,12 +622,15 @@
       g: sel.food.po ? 0 : sel.grams, meal: $('edMeal').value,
       k: Math.round(m.k), p: +m.p.toFixed(1), c: +m.c.toFixed(1), f: +m.f.toFixed(1), src: sel.food.online ? 'off' : 'local'
     });
-    searchSeq++; sel = null; results = { local: [], online: [], state: 'idle', parsed: null };
-    $('q').value = ''; renderResults(); $('q').focus();
+    resetSearch();
   }
-  $('editor').addEventListener('click', function (ev) { if (ev.target.id === 'edAdd') commitSelected(); });
+  $('editor').addEventListener('click', function (ev) {
+    if (ev.target.id === 'edAdd') commitSelected();
+    var cp = ev.target.closest('[data-create-part]');
+    if (cp) openManual(cp.dataset.createPart);
+  });
   $('editor').addEventListener('keydown', function (ev) {
-    if (ev.key === 'Enter' && ev.target.id === 'edGrams') { ev.preventDefault(); commitSelected(); }
+    if (ev.key === 'Enter' && (ev.target.id === 'edGrams' || ev.target.dataset.pg != null)) { ev.preventDefault(); commitSelected(); }
   });
 
   function openManual(name) {
@@ -555,7 +669,7 @@
   function toggleFav(e) {
     var k = itemKey(e), was = isFav(e);
     if (was) favs = favs.filter(function (f) { return itemKey(f) !== k; });
-    else favs.push({ name: e.name, g: e.g || 0, k: e.k, p: e.p, c: e.c, f: e.f });
+    else favs.push({ name: e.name, g: e.g || 0, k: e.k, p: e.p, c: e.c, f: e.f, det: e.det });
     save('favs', favs);
     renderLog(); renderQuick();
     toast(was ? 'Quitado de favoritos' : 'Guardado en favoritos');
@@ -613,7 +727,7 @@
     var b = ev.target.closest('[data-q]');
     if (!b) return;
     var e = quickItems[+b.dataset.q];
-    addEntry({ name: e.name, g: e.g || 0, meal: defaultMeal(), k: e.k, p: e.p, c: e.c, f: e.f, src: 'rapido' });
+    addEntry({ name: e.name, g: e.g || 0, meal: defaultMeal(), k: e.k, p: e.p, c: e.c, f: e.f, det: e.det, src: 'rapido' });
   });
 
   /* ---------- Peso ---------- */

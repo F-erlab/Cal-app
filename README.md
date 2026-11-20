@@ -9,6 +9,7 @@ App web para registrar calorías y seguir un déficit calórico.
 - **Registro de comidas:** se escribe en lenguaje natural («3 huevos revueltos», «200 g de arroz», «1 taza de leche») y la app calcula calorías, proteína, carbohidratos y grasas. La cantidad se puede ajustar antes de agregar.
 - **Fuentes de datos:** tabla local de unos 260 alimentos y platos comunes, con comidas paraguayas (`foods.js`, valores aproximados por 100 g) y búsqueda en internet en [Open Food Facts](https://world.openfoodfacts.org).
 - **Búsqueda tolerante:** reconoce errores de tipeo («hevos», «arros con pollo») y nombres alternativos («mandioca» / «yuca»).
+- **Combinaciones automáticas:** si no existe un plato con ese nombre, «pan con queso» o «arroz, pollo y ensalada» se calcula sumando cada ingrediente; se puede cambiar cada ingrediente y su cantidad.
 - **Mis alimentos:** si algo no aparece, se crea con los datos de la etiqueta o la receta (por porción o por gramos) y queda guardado para las próximas búsquedas.
 - **Progreso:** anillo con las calorías consumidas contra el objetivo y gráfico de los últimos 14 días.
 - **Historial:** cada día queda guardado y se puede volver a consultar o editar.

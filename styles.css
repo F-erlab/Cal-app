@@ -320,3 +320,15 @@ input:focus-visible + span, input:focus-visible + .opt { outline: 2px solid var(
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation-duration: 0s !important; }
 }
+
+/* Combinaciones */
+.combo { display: grid; gap: 10px; }
+.combo-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px 76px; gap: 10px; align-items: end; }
+.combo-k { padding-bottom: 14px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--text-2); font-size: .9rem; }
+.link.inline { margin: 0; font-size: inherit; }
+.entry-main small.det { display: block; color: var(--text-2); }
+@media (max-width: 640px) {
+  .combo-row { grid-template-columns: minmax(0, 1fr) 96px; }
+  .combo-row .field:first-child { grid-column: 1 / -1; }
+  .combo-k { padding-bottom: 14px; }
+}
