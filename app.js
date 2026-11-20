@@ -103,7 +103,29 @@
     var s = a.length < b.length ? a : b, l = a.length < b.length ? b : a;
     if (s.length >= 3 && l.indexOf(s) === 0 && l.length - s.length <= 2) return 0.9; // plurales
     if (s.length >= 4 && l.indexOf(s) === 0) return 0.5;
+    if (s.length >= 4) { // errores de tipeo
+      var d = editDist(a, b, 2);
+      if (d === 1) return 0.8;
+      if (d === 2 && s.length >= 7) return 0.65;
+    }
     return 0;
+  }
+  function editDist(a, b, max) {
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    var prev = [], cur, i, k;
+    for (k = 0; k <= b.length; k++) prev[k] = k;
+    for (i = 1; i <= a.length; i++) {
+      cur = [i];
+      var rowMin = i;
+      for (k = 1; k <= b.length; k++) {
+        cur[k] = Math.min(prev[k] + 1, cur[k - 1] + 1, prev[k - 1] + (a[i - 1] === b[k - 1] ? 0 : 1));
+        if (i > 1 && k > 1 && a[i - 1] === b[k - 2] && a[i - 2] === b[k - 1]) cur[k] = Math.min(cur[k], prev2[k - 2] + 1);
+        rowMin = Math.min(rowMin, cur[k]);
+      }
+      if (rowMin > max) return max + 1;
+      var prev2 = prev; prev = cur;
+    }
+    return prev[b.length];
   }
   function phraseScore(qt, pt) {
     if (!qt.length || !pt.length) return 0;
@@ -115,25 +137,30 @@
     });
     return (sum / qt.length) * 0.7 + (sum / Math.max(pt.length, qt.length)) * 0.3;
   }
-  var INDEX = (window.FOODS || []).map(function (f) {
-    return { f: f, phrases: [f.n].concat(f.a || []).map(tokens) };
-  });
-  function searchLocal(name) {
-    var qt = tokens(name);
-    return INDEX.map(function (it) {
+  function indexOf(list) {
+    return list.map(function (f) { return { f: f, phrases: [f.n].concat(f.a || []).map(tokens) }; });
+  }
+  var INDEX = indexOf(window.FOODS || []);
+  function rank(index, qt, limit) {
+    return index.map(function (it) {
       var best = 0;
       it.phrases.forEach(function (p) { best = Math.max(best, phraseScore(qt, p)); });
       return { f: it.f, s: best };
     }).filter(function (r) { return r.s >= 0.5; })
       .sort(function (a, b) { return b.s - a.s; })
-      .slice(0, 6)
+      .slice(0, limit)
       .map(function (r) { return r.f; });
+  }
+  function searchLocal(name) {
+    var qt = tokens(name);
+    return rank(indexOf(myFoods), qt, 4).concat(rank(INDEX, qt, 6));
   }
 
   // Convierte cantidad + unidad en gramos para un alimento dado.
   function gramsFor(food, qty, unit) {
     var m = food.m || {};
     var q = qty == null ? 1 : qty;
+    if (food.po) return (unit && unit !== 'u' && unit !== 'plato' ? 1 : q) * 100; // 100 = 1 porción
     switch (unit) {
       case 'g': case 'ml': return q;
       case 'kg': case 'l': return q * 1000;
@@ -141,7 +168,7 @@
       case 'vaso': return q * 200;
       case 'cucharada': return q * (m.cucharada || 15);
       case 'cucharadita': return q * (m.cucharadita || 5);
-      case 'plato': return q * 250;
+      case 'plato': return q * (food.un === 'plato' ? food.u : 250);
       case 'u': return q * (food.u || 100);
       default:
         if (food.u) return q * food.u;
@@ -188,6 +215,7 @@
   var log = load('log', {});
   var weights = load('weights', {});
   var favs = load('favs', []);
+  var myFoods = load('myfoods', []);
   var day = today();
   var results = { local: [], online: [], state: 'idle', parsed: null };
   var sel = null; // { food, grams }
@@ -418,21 +446,31 @@
     var g = Math.max(1, Math.round(gramsFor(food, pq.qty, pq.unit)));
     return '<button type="button" class="res" data-i="' + i + '" aria-pressed="' + (sel && sel.food === food) + '">' +
       '<span class="res-name">' + esc(food.n) + (food.brand ? '<small>' + esc(food.brand) + '</small>' : '') + '</span>' +
-      '<span class="res-k">' + fmt(g) + (food.liq ? ' ml · ' : ' g · ') + fmt(food.k * g / 100) + ' kcal</span></button>';
+      '<span class="res-k">' + amountText(food, g) + ' · ' + fmt(food.k * g / 100) + ' kcal</span></button>';
+  }
+  function amountText(food, g) {
+    if (food.po) { var n = g / 100; return fmt1(n) + (n === 1 ? ' porción' : ' porciones'); }
+    return fmt(g) + (food.liq ? ' ml' : ' g');
   }
   function renderResults() {
-    var html = '', n = results.local.length;
-    if (n) html += '<h3>Alimentos comunes</h3>' + results.local.map(function (f, i) { return resRow(f, i); }).join('');
+    var html = '', n = results.local.length, mine = '', common = '';
+    results.local.forEach(function (f, i) { if (f.mine) mine += resRow(f, i); else common += resRow(f, i); });
+    if (mine) html += '<h3>Mis alimentos</h3>' + mine;
+    if (common) html += '<h3>Alimentos comunes</h3>' + common;
     if (results.state === 'loading') html += '<p class="hint"><span class="spinner"></span>Buscando en internet…</p>';
     else if (results.state === 'error') html += '<p class="hint">No se pudo consultar internet en este momento.' + (n ? '' : ' Podés cargar las calorías a mano.') + '</p>';
     else if (results.state === 'done') {
       if (results.online.length) html += '<h3>De internet · Open Food Facts</h3>' + results.online.map(function (f, i) { return resRow(f, n + i); }).join('');
-      else if (!n) html += '<p class="hint">No encontramos ese alimento. Probá con otro nombre o cargá las calorías a mano.</p>';
+      else if (!n) html += '<p class="hint">No encontramos ese alimento. Probá con otro nombre o crealo vos con sus calorías.</p>';
+    }
+    if (results.state !== 'loading' && results.parsed) {
+      html += '<button type="button" class="link" data-create>¿No está? Crear «' + esc(results.parsed.name) + '»</button>';
     }
     $('results').innerHTML = html;
     if (!sel) $('editor').hidden = true;
   }
   $('results').addEventListener('click', function (ev) {
+    if (ev.target.closest('[data-create]')) { openManual(results.parsed.name); return; }
     var b = ev.target.closest('[data-i]');
     if (b) select(all()[+b.dataset.i]);
   });
@@ -443,7 +481,9 @@
     var meal = ed.querySelector('select') ? ed.querySelector('select').value : defaultMeal();
     ed.innerHTML = '<p class="editor-title">' + esc(food.n) + '</p>' +
       '<div class="editor-row">' +
-      '<label class="field"><span>Cantidad</span><div class="input-unit"><input id="edGrams" type="number" inputmode="decimal" min="1" step="1" value="' + sel.grams + '"><em>' + (food.liq ? 'ml' : 'g') + '</em></div></label>' +
+      (food.po
+        ? '<label class="field"><span>Porciones</span><input id="edGrams" type="number" inputmode="decimal" min="0.25" step="0.25" value="' + sel.grams / 100 + '"></label>'
+        : '<label class="field"><span>Cantidad</span><div class="input-unit"><input id="edGrams" type="number" inputmode="decimal" min="1" step="1" value="' + sel.grams + '"><em>' + (food.liq ? 'ml' : 'g') + '</em></div></label>') +
       '<label class="field"><span>Comida</span><select id="edMeal">' + MEALS.map(function (m) {
         return '<option value="' + m[0] + '"' + (m[0] === meal ? ' selected' : '') + '>' + m[1] + '</option>';
       }).join('') + '</select></label>' +
@@ -453,20 +493,22 @@
   }
   function updateEditorMacros() {
     var m = macrosFor(sel.food, sel.grams || 0), food = sel.food;
-    var unit = food.u ? '<span>1 ' + esc(food.un || 'porción') + ' ≈ ' + fmt(food.u) + ' g</span>' : '';
+    var unit = food.u && !food.po ? '<span>1 ' + esc(food.un || 'porción') + ' ≈ ' + fmt(food.u) + ' g</span>' : '';
     $('edMacros').innerHTML = '<span><strong>' + fmt(m.k) + '</strong> kcal</span>' +
       '<span>Proteína ' + fmt1(m.p) + ' g</span><span>Carbohidratos ' + fmt1(m.c) + ' g</span><span>Grasas ' + fmt1(m.f) + ' g</span>' + unit;
   }
   $('editor').addEventListener('input', function (ev) {
     if (ev.target.id !== 'edGrams') return;
-    sel.grams = parseFloat(ev.target.value) || 0;
+    sel.grams = (parseFloat(ev.target.value) || 0) * (sel.food.po ? 100 : 1);
     updateEditorMacros();
   });
   function commitSelected() {
     if (!sel || !(sel.grams > 0)) { toast('Ingresá una cantidad válida'); return; }
     var m = macrosFor(sel.food, sel.grams);
+    var por = sel.grams / 100;
     addEntry({
-      name: sel.food.n + (sel.food.brand ? ' (' + sel.food.brand + ')' : ''), g: sel.grams, meal: $('edMeal').value,
+      name: sel.food.n + (sel.food.brand ? ' (' + sel.food.brand + ')' : '') + (sel.food.po && por !== 1 ? ' × ' + fmt1(por) : ''),
+      g: sel.food.po ? 0 : sel.grams, meal: $('edMeal').value,
       k: Math.round(m.k), p: +m.p.toFixed(1), c: +m.c.toFixed(1), f: +m.f.toFixed(1), src: sel.food.online ? 'off' : 'local'
     });
     searchSeq++; sel = null; results = { local: [], online: [], state: 'idle', parsed: null };
@@ -477,19 +519,34 @@
     if (ev.key === 'Enter' && ev.target.id === 'edGrams') { ev.preventDefault(); commitSelected(); }
   });
 
+  function openManual(name) {
+    var f = $('formManual');
+    f.hidden = false;
+    f.elements.name.value = name ? name.charAt(0).toUpperCase() + name.slice(1) : $('q').value.trim();
+    f.elements.name.focus();
+    f.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
   $('btnManual').addEventListener('click', function () {
-    var f = $('formManual'); f.hidden = !f.hidden;
-    if (!f.hidden) { f.elements.name.value = $('q').value.trim(); f.elements.name.focus(); }
+    var f = $('formManual');
+    if (f.hidden) openManual(); else f.hidden = true;
   });
   $('formManual').addEventListener('submit', function (ev) {
     ev.preventDefault();
     var f = ev.target, name = f.elements.name.value.trim(), k = parseFloat(f.elements.k.value);
+    var g = parseFloat(f.elements.g.value) || 0;
+    var p = parseFloat(f.elements.p.value) || 0, c = parseFloat(f.elements.c.value) || 0, fat = parseFloat(f.elements.f.value) || 0;
     if (!name || !(k >= 0)) { toast('Completá el nombre y las calorías'); return; }
-    addEntry({
-      name: name, g: 0, meal: defaultMeal(), k: Math.round(k), src: 'manual',
-      p: parseFloat(f.elements.p.value) || 0, c: parseFloat(f.elements.c.value) || 0, f: parseFloat(f.elements.f.value) || 0
-    });
-    f.reset(); f.hidden = true;
+    if (f.elements.keep.checked) {
+      var r = g > 0 ? 100 / g : 1;
+      var food = { id: Date.now().toString(36), n: name, mine: 1, k: k * r, p: p * r, c: c * r, f: fat * r };
+      if (g > 0) { food.u = g; food.un = 'porción'; } else { food.po = 1; food.u = 100; food.un = 'porción'; }
+      myFoods = myFoods.filter(function (m) { return norm(m.n) !== norm(name); });
+      myFoods.push(food); save('myfoods', myFoods);
+    }
+    addEntry({ name: name, g: g, meal: defaultMeal(), k: Math.round(k), p: p, c: c, f: fat, src: 'manual' });
+    f.reset(); f.elements.keep.checked = true; f.hidden = true;
+    searchSeq++; sel = null; results = { local: [], online: [], state: 'idle', parsed: null };
+    $('q').value = ''; renderResults();
   });
 
   /* ---------- Favoritos y recientes ---------- */
@@ -533,9 +590,24 @@
     var rec = recents(), html = '';
     if (favs.length) html += '<h3>Favoritos</h3><div class="chips">' + favs.map(function (f) { return chip(f, true); }).join('') + '</div>';
     if (rec.length) html += '<h3>Recientes</h3><div class="chips">' + rec.map(function (e) { return chip(e, false); }).join('') + '</div>';
+    if (myFoods.length) {
+      var open = $('myFoods') && $('myFoods').open;
+      html += '<details id="myFoods" class="myfoods"' + (open ? ' open' : '') + '><summary>Mis alimentos (' + myFoods.length + ')</summary><ul>' +
+        myFoods.map(function (m) {
+          var portion = m.po ? '1 porción' : fmt(m.u) + ' g';
+          return '<li><span>' + esc(m.n) + '<small>' + portion + ' · ' + fmt(m.k * m.u / 100) + ' kcal</small></span>' +
+            '<button type="button" class="del" data-myfood="' + m.id + '" aria-label="Borrar ' + esc(m.n) + ' de mis alimentos">×</button></li>';
+        }).join('') + '</ul><p class="fine">Aparecen primero al buscar. Para cambiar uno, crealo de nuevo con el mismo nombre.</p></details>';
+    }
     $('quick').innerHTML = html;
   }
   $('quick').addEventListener('click', function (ev) {
+    var d = ev.target.closest('[data-myfood]');
+    if (d) {
+      myFoods = myFoods.filter(function (m) { return m.id !== d.dataset.myfood; });
+      save('myfoods', myFoods); renderQuick(); toast('Borrado de mis alimentos');
+      return;
+    }
     var s = ev.target.closest('[data-qfav]');
     if (s) { toggleFav(quickItems[+s.dataset.qfav]); return; }
     var b = ev.target.closest('[data-q]');

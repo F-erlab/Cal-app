@@ -209,8 +209,18 @@ input:focus-visible + span, input:focus-visible + .opt { outline: 2px solid var(
 .editor input, .editor select { background: var(--surface); }
 .editor-macros { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: .9rem; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .editor-macros strong { color: var(--text); font: 500 1.5rem var(--display); }
-.manual { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; align-items: end; margin-top: 14px; }
-.manual .wide { grid-column: 1 / -1; }
+.manual { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; align-items: end; margin-top: 14px; }
+.manual .wide, .manual-help, .check { grid-column: 1 / -1; }
+.manual-help { font-size: .88rem; color: var(--text-2); }
+.check { display: flex; align-items: center; gap: 10px; font-size: .9rem; color: var(--text-2); cursor: pointer; }
+.check input { width: 20px; height: 20px; accent-color: var(--accent); }
+.results .link { justify-self: start; margin-top: 6px; }
+.myfoods { margin-top: 18px; }
+.myfoods summary { cursor: pointer; font: 700 .74rem var(--body); letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); }
+.myfoods ul { list-style: none; margin: 8px 0; padding: 0; }
+.myfoods li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.myfoods li span { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.myfoods li small { display: block; font-weight: 400; color: var(--text-3); font-size: .8rem; }
 .manual .btn { grid-column: 1 / -1; justify-self: end; }
 
 /* Favoritos y recientes */
