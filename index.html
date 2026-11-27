@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Cal · Registro de calorías</title>
   <meta name="description" content="Registrá tus comidas, calculá tu déficit calórico y seguí tu progreso día a día.">
   <meta name="theme-color" content="#f6f3ee">
@@ -21,24 +21,43 @@
   </script>
 </head>
 <body>
-  <header class="top">
-    <a class="brand" href="#" aria-label="Cal, inicio"><span class="brand-mark">C</span>Cal</a>
-    <div class="top-actions">
-      <button id="btnProfile" class="icon-btn" type="button" aria-label="Editar mis datos" hidden>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg>
-      </button>
-      <button id="btnTheme" class="icon-btn" type="button" aria-label="Cambiar entre tema claro y oscuro">
-        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.500 10.500z"/></svg>
-        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.900 4.900l1.400 1.400M17.700 17.700l1.400 1.400M4.900 19.100l1.400-1.400M17.700 6.300l1.400-1.400"/></svg>
-      </button>
+  <header class="top" id="top">
+    <div class="top-in">
+      <a class="brand" href="#" aria-label="Cal, inicio"><span class="brand-mark">C</span>Cal</a>
+      <nav id="tabs" class="tabs" aria-label="Secciones" hidden>
+        <button type="button" class="tab" data-view="day" aria-current="page">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 8.5 8.5"/><path d="M12 8v4l2.5 2"/></svg><span>Hoy</span>
+        </button>
+        <button type="button" class="tab" data-view="progress">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span>Progreso</span>
+        </button>
+        <button type="button" class="tab" data-view="profile">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/></svg><span>Perfil</span>
+        </button>
+      </nav>
+      <div class="top-actions">
+        <button id="btnTheme" class="icon-btn" type="button" aria-label="Cambiar entre tema claro y oscuro">
+          <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.500 10.500z"/></svg>
+          <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.900 4.900l1.400 1.400M17.700 17.700l1.400 1.400M4.900 19.100l1.400-1.400M17.700 6.300l1.400-1.400"/></svg>
+        </button>
+      </div>
     </div>
+    <button id="mini" class="mini" type="button" aria-label="Volver al resumen del día" tabindex="-1">
+      <span class="mini-in">
+        <span id="miniDay" class="mini-day">Hoy</span>
+        <span id="miniText" class="mini-text"></span>
+        <i class="mini-bar"><i id="miniFill"></i></i>
+      </span>
+    </button>
   </header>
 
-  <!-- Datos iniciales -->
+  <!-- Datos iniciales / Perfil -->
   <main id="viewSetup" class="wrap narrow" hidden>
-    <p class="eyebrow">Primer paso</p>
-    <h1 id="setupTitle">Contanos sobre vos</h1>
-    <p class="lead">Con estos datos calculamos tu IMC, tus calorías de mantenimiento y tu objetivo diario.</p>
+    <div>
+      <p class="eyebrow" id="setupEyebrow">Primer paso</p>
+      <h1 id="setupTitle">Contanos sobre vos</h1>
+      <p class="lead" id="setupLead">Con estos datos calculamos tu IMC, tus calorías de mantenimiento y tu objetivo diario.</p>
+    </div>
 
     <form id="formSetup" class="card form" novalidate>
       <fieldset>
@@ -68,6 +87,17 @@
         <div class="options three" id="optDeficit"></div>
       </fieldset>
 
+      <fieldset>
+        <legend>Metas <small>(opcional)</small></legend>
+        <div class="grid2">
+          <label class="field"><span>Peso meta</span>
+            <div class="input-unit"><input name="pesoMeta" type="number" inputmode="decimal" min="30" max="300" step="0.1" placeholder="—"><em>kg</em></div></label>
+          <label class="field"><span>Proteína por día</span>
+            <div class="input-unit"><input name="protManual" type="number" inputmode="numeric" min="20" max="400" step="1" placeholder="Automática"><em>g</em></div></label>
+        </div>
+        <p id="protHelp" class="field-help"></p>
+      </fieldset>
+
       <div id="setupPreview" class="preview" aria-live="polite"></div>
       <p id="setupError" class="error" role="alert" hidden></p>
 
@@ -76,6 +106,22 @@
         <button type="submit" class="btn primary">Guardar y continuar</button>
       </div>
     </form>
+
+    <section class="card" aria-labelledby="bkTitle">
+      <h2 id="bkTitle">Copia de seguridad</h2>
+      <p class="muted" id="bkInfo"></p>
+      <div class="bk-actions">
+        <button type="button" id="btnExport" class="btn primary">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Descargar copia
+        </button>
+        <button type="button" id="btnImport" class="btn ghost">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V9M7 14l5-5 5 5M5 4h14"/></svg>Restaurar desde archivo
+        </button>
+        <input type="file" id="fileImport" accept="application/json,.json" hidden>
+      </div>
+      <p class="fine">Tus datos se guardan solo en este navegador. Descargá una copia cada tanto para no perderlos si cambiás de teléfono o borrás los datos del navegador.</p>
+    </section>
+
     <p class="fine">El cálculo usa la fórmula de Mifflin-St Jeor, que necesita sexo y edad además de peso y altura. Es una estimación y no reemplaza la consulta con un profesional de la salud.</p>
   </main>
 
@@ -90,17 +136,20 @@
       <button id="btnNext" class="icon-btn" type="button" aria-label="Día siguiente"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
     </nav>
 
-    <section class="card summary" aria-label="Resumen del día">
+    <section class="card summary" id="summary" aria-label="Resumen del día">
       <div class="ring-box">
         <svg class="ring" viewBox="0 0 200 200" role="img" aria-labelledby="ringLabel">
           <title id="ringLabel"></title>
           <circle class="ring-track" cx="100" cy="100" r="84"/>
           <circle id="ringArc" class="ring-arc" cx="100" cy="100" r="84" transform="rotate(-90 100 100)"/>
+          <circle class="ring-track inner" cx="100" cy="100" r="66"/>
+          <circle id="ringProt" class="ring-prot" cx="100" cy="100" r="66" transform="rotate(-90 100 100)"/>
         </svg>
-        <div class="ring-center">
+        <button id="ringCenter" class="ring-center" type="button" aria-label="Alternar entre calorías restantes y consumidas">
           <strong id="kcalNow">0</strong>
-          <span id="kcalOf">de 0 kcal</span>
-        </div>
+          <span id="kcalOf">kcal restantes</span>
+          <small id="kcalSub"></small>
+        </button>
       </div>
       <div class="summary-side">
         <p id="statusLine" class="status-line"></p>
@@ -116,6 +165,7 @@
 
     <section class="card" aria-labelledby="addTitle">
       <h2 id="addTitle">Registrar comida</h2>
+      <div class="meal-pick" role="radiogroup" aria-label="Agregar en" id="mealPick"></div>
       <form id="formSearch" class="search">
         <input id="q" type="text" autocomplete="off" enterkeyhint="search" placeholder="Ej.: 3 huevos revueltos, 200 g de arroz, 1 taza de leche" aria-label="Qué comiste">
         <button class="btn primary" type="submit">Buscar</button>
@@ -138,8 +188,30 @@
     </section>
 
     <section class="card" aria-labelledby="logTitle">
-      <h2 id="logTitle">Comidas del día</h2>
+      <div class="card-head">
+        <h2 id="logTitle">Comidas del día</h2>
+        <p class="muted" id="logHint"></p>
+      </div>
+      <div id="copyBar" class="copybar" hidden></div>
       <div id="log"></div>
+    </section>
+
+    <p class="fine">Los valores nutricionales son aproximados. Fuentes: tabla local de alimentos comunes y <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>. Tus datos se guardan solo en este dispositivo.</p>
+  </main>
+
+  <!-- Progreso -->
+  <main id="viewProgress" class="wrap" hidden>
+    <div>
+      <p class="eyebrow">Progreso</p>
+      <h1>Cómo vas</h1>
+    </div>
+
+    <section class="card" aria-labelledby="weekTitle">
+      <div class="card-head">
+        <h2 id="weekTitle">Últimos 7 días</h2>
+        <p id="streak" class="streak"></p>
+      </div>
+      <div id="week" class="week"></div>
     </section>
 
     <section class="card" aria-labelledby="wTitle">
@@ -152,6 +224,7 @@
         <button class="btn primary" type="submit">Guardar peso</button>
       </form>
       <p id="wHint" class="hint"></p>
+      <div id="wGoal" class="goalbox" hidden></div>
       <div id="wChart" class="chart"></div>
       <details id="wDetails" class="table-view">
         <summary>Ver como tabla</summary>
@@ -165,16 +238,15 @@
         <p id="histAvg" class="muted"></p>
       </div>
       <div id="chart" class="chart"></div>
+      <p class="legend"><span><i class="lg ok"></i>Dentro del objetivo</span><span><i class="lg over"></i>Por encima</span><span><i class="lg none"></i>Sin registro</span></p>
       <details class="table-view">
         <summary>Ver como tabla</summary>
         <div id="histTable"></div>
       </details>
     </section>
-
-    <p class="fine">Los valores nutricionales son aproximados. Fuentes: tabla local de alimentos comunes y <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener">Open Food Facts</a>. Tus datos se guardan solo en este dispositivo.</p>
   </main>
 
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"><span id="toastMsg"></span><button type="button" id="toastAct" hidden></button></div>
   <div id="tip" class="tip" hidden></div>
 
   <script src="foods.js"></script>
